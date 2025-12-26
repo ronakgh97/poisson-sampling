@@ -16,7 +16,7 @@ pub fn plotter(plane: &PLane2D, output_path: &str) -> anyhow::Result<()> {
     for point in &plane.points {
         chart.draw_series(PointSeries::of_element(
             vec![(point.x, point.y)],
-            5,
+            2.5,
             &RED,
             &|c, s, st| {
                 return EmptyElement::at(c) + Circle::new((0, 0), s, st.filled());

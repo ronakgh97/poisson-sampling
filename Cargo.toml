@@ -10,3 +10,4 @@ rayon = "1.11.0"
 anyhow = "1.0.100"
 colored = "3.0.0"
 indicatif = "0.18.3"
+uuid = {  version = "1.19.0", features = ["v4"] }

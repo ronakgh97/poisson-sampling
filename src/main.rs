@@ -1,6 +1,7 @@
 mod plot;
 
 use crate::plot::plotter;
+use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::prelude::*;
 use rayon::prelude::*;
@@ -20,6 +21,12 @@ impl PLane2D {
             height,
             points: Vec::new(),
         }
+    }
+
+    pub fn calculate_expected_points(&self, r: f64) -> usize {
+        let area = self.width * self.height;
+        let point_area = std::f64::consts::PI * r * r;
+        (area / point_area) as usize
     }
 }
 
@@ -66,28 +73,38 @@ impl Point2D {
 }
 
 fn main() {
-    let total_points = 10000;
+    let total_points = 2000;
+    let point_radius = 100.0;
+    let uuid = uuid::Uuid::new_v4();
 
-    let plane = Arc::new(Mutex::new(PLane2D::new(2500.0, 2500.0)));
+    let plane = Arc::new(Mutex::new(PLane2D::new(5000.0, 5000.0)));
     let progress = Arc::new(Mutex::new(ProgressBar::new(total_points as u64)));
+
+    {
+        let plan_guard = plane.lock().unwrap();
+        let expected = plan_guard.calculate_expected_points(point_radius);
+        if expected < total_points {
+            eprintln!(
+                "Warning: The expected number of points ({}) is less than the requested total points ({}). Consider reducing the point radius or increasing the plane size.",
+                expected, total_points
+            );
+        }
+    }
 
     // Setup progress bar style
     {
         let prog = progress.lock().unwrap();
         prog.set_style(
             ProgressStyle::default_bar()
-                .template("[{bar:40.cyan/blue}] {pos}/{len} ({percent}%) ({elapsed_precise})")
+                .template("[{bar:40.cyan/blue}] {pos}/{len} ({percent}%)")
                 .unwrap()
                 .progress_chars("##>-"),
         );
     }
 
-    // SMALLER RADIUS to fit more points!
-    let point_radius = 100.0;
-
     println!("Starting Poisson sampling...");
 
-    (0..total_points * 10000).into_par_iter().for_each(|_| {
+    (0..total_points * 100000).into_par_iter().for_each(|_| {
         let plane_clone = Arc::clone(&plane);
         let progress_clone = Arc::clone(&progress);
 
@@ -122,18 +139,18 @@ fn main() {
     let point_count = final_plane.points.len();
 
     let output_path = format!(
-        "output/poisson_sampling_{}points_{}radius.png",
-        point_count, point_radius
+        "output/poisson_sampling_{}points_{}radius_id{}.png",
+        point_count, point_radius, uuid
     );
 
     // Get a &PLane2D from the MutexGuard for the plotter function
     match plotter(&*final_plane, &output_path) {
-        Ok(_) => println!("Plot saved to {}", output_path),
+        Ok(_) => println!("Plot saved to {}", output_path.blue().bold()),
         Err(e) => eprintln!("Error generating plot: {}", e),
     }
 
     println!(
         "Generated {} points with minimum distance: {}",
-        point_count, point_radius
+        point_count.to_string().green(), point_radius.to_string().green()
     );
 }
