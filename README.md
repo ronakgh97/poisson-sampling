@@ -5,7 +5,7 @@ set of points that are evenly distributed within a specified area, ensuring that
 minimum distance (radius). This technique is commonly used in computer graphics, procedural generation, and spatial
 sampling.
 
-## Plot Samples
+## Brute force Plot Samples
 
 - Points: 1803
 - Radius: 100
@@ -18,3 +18,9 @@ sampling.
 - Area: 5000 x 5000
 
 ![Sampling 1500_100_5000x5000](output/poisson_sampling_1500points_100radius_id334de575-0a8d-4e0f-8d45-62640799e895.png)
+
+- Points: 4007
+- Radius: 100
+- Area: 7500 x 7500
+
+![Sampling 4007_100_7500x7500](output/poisson_sampling_4007points_100radius_id20d15cbe-0999-4ef3-b91f-fe3e385bdbee.png)
