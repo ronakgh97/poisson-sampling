@@ -2,9 +2,10 @@ mod plot;
 
 use crate::plot::plotter;
 use colored::Colorize;
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rand::prelude::*;
 use rayon::prelude::*;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
@@ -77,8 +78,8 @@ fn main() {
     let point_radius = 100.0;
     let uuid = uuid::Uuid::new_v4();
 
-    let plane = Arc::new(Mutex::new(PLane2D::new(5000.0, 5000.0)));
-    let progress = Arc::new(Mutex::new(ProgressBar::new(total_points as u64)));
+    let plane = Arc::new(Mutex::new(PLane2D::new(10000.0, 10000.0)));
+    let max_iterations = total_points * 100000;
 
     {
         let plan_guard = plane.lock().unwrap();
@@ -91,22 +92,42 @@ fn main() {
         }
     }
 
-    // Setup progress bar style
-    {
-        let prog = progress.lock().unwrap();
-        prog.set_style(
-            ProgressStyle::default_bar()
-                .template("[{bar:40.cyan/blue}] {pos}/{len} ({percent}%)")
-                .unwrap()
-                .progress_chars("##>-"),
-        );
-    }
-
     println!("Starting Poisson sampling...");
 
-    (0..total_points * 100000).into_par_iter().for_each(|_| {
+    // Setup MultiProgress for displaying both bars
+    let multi_progress = Arc::new(MultiProgress::new());
+
+    let points_bar = multi_progress.add(ProgressBar::new(total_points as u64));
+    points_bar.set_style(
+        ProgressStyle::default_bar()
+            .template("Points:     [{bar:40.cyan/blue}] {pos}/{len} ({percent}%)")
+            .unwrap()
+            .progress_chars("●●>-"),
+    );
+
+    let iter_bar = multi_progress.add(ProgressBar::new(max_iterations as u64));
+    iter_bar.set_style(
+        ProgressStyle::default_bar()
+            .template("Iterations: [{bar:40.green/yellow}] {pos}/{len} ({percent}%)")
+            .unwrap()
+            .progress_chars("▬▬>-"),
+    );
+
+    let progress = Arc::new(points_bar);
+    let iteration_progress = Arc::new(iter_bar);
+    let iteration_counter = Arc::new(AtomicUsize::new(0));
+
+    (0..max_iterations).into_par_iter().for_each(|_| {
         let plane_clone = Arc::clone(&plane);
         let progress_clone = Arc::clone(&progress);
+        let iter_progress_clone = Arc::clone(&iteration_progress);
+        let counter_clone = Arc::clone(&iteration_counter);
+
+        // Increment iteration counter and update progress bar every 10000 iterations
+        let current_iter = counter_clone.fetch_add(1, Ordering::Relaxed);
+        if current_iter % 10000 == 0 {
+            iter_progress_clone.set_position(current_iter as u64);
+        }
 
         // Generate a random candidate point
         let candidate = {
@@ -127,13 +148,15 @@ fn main() {
             plane_guard.points.push(candidate);
             drop(plane_guard); // Explicitly release lock before progress update
 
-            // Update progress bar (needs its own lock)
-            progress_clone.lock().unwrap().inc(1);
+            // Update progress bar
+            progress_clone.inc(1);
         }
     });
 
-    // Finish progress bar
-    progress.lock().unwrap().finish();
+    // Finish progress bars
+    let final_iter_count = iteration_counter.load(Ordering::Relaxed);
+    iteration_progress.finish_with_message(format!("Completed {} iterations", final_iter_count));
+    progress.finish_with_message("Done");
 
     let final_plane = plane.lock().unwrap();
     let point_count = final_plane.points.len();
@@ -151,6 +174,7 @@ fn main() {
 
     println!(
         "Generated {} points with minimum distance: {}",
-        point_count.to_string().green(), point_radius.to_string().green()
+        point_count.to_string().green(),
+        point_radius.to_string().green()
     );
 }
